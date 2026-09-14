@@ -29,9 +29,9 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"go.uber.org/goleak"
+	"google.golang.org/protobuf/proto"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1183,7 +1183,7 @@ var _ = Describe("controller", func() {
 
 			It("should get updated on successful reconciliation", func(ctx SpecContext) {
 				Expect(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "success").Write(&reconcileTotal)).To(Succeed())
+					Expect(writeMetric("controller_runtime_reconcile_total", map[string]string{"controller": ctrl.Name, "result": "success"}, &reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
 						return fmt.Errorf("metric reconcile total not reset")
 					}
@@ -1200,7 +1200,7 @@ var _ = Describe("controller", func() {
 				fakeReconcile.AddResult(reconcile.Result{}, nil)
 				Expect(<-reconciled).To(Equal(request))
 				Eventually(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "success").Write(&reconcileTotal)).To(Succeed())
+					Expect(writeMetric("controller_runtime_reconcile_total", map[string]string{"controller": ctrl.Name, "result": "success"}, &reconcileTotal)).To(Succeed())
 					if actual := reconcileTotal.GetCounter().GetValue(); actual != 1.0 {
 						return fmt.Errorf("metric reconcile total expected: %v and got: %v", 1.0, actual)
 					}
@@ -1210,7 +1210,7 @@ var _ = Describe("controller", func() {
 
 			It("should get updated on reconcile errors", func(ctx SpecContext) {
 				Expect(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "error").Write(&reconcileTotal)).To(Succeed())
+					Expect(writeMetric("controller_runtime_reconcile_total", map[string]string{"controller": ctrl.Name, "result": "error"}, &reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
 						return fmt.Errorf("metric reconcile total not reset")
 					}
@@ -1227,7 +1227,7 @@ var _ = Describe("controller", func() {
 				fakeReconcile.AddResult(reconcile.Result{}, fmt.Errorf("expected error: reconcile"))
 				Expect(<-reconciled).To(Equal(request))
 				Eventually(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "error").Write(&reconcileTotal)).To(Succeed())
+					Expect(writeMetric("controller_runtime_reconcile_total", map[string]string{"controller": ctrl.Name, "result": "error"}, &reconcileTotal)).To(Succeed())
 					if actual := reconcileTotal.GetCounter().GetValue(); actual != 1.0 {
 						return fmt.Errorf("metric reconcile total expected: %v and got: %v", 1.0, actual)
 					}
@@ -1237,7 +1237,7 @@ var _ = Describe("controller", func() {
 
 			It("should get updated when reconcile returns with retry enabled", func(ctx SpecContext) {
 				Expect(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "retry").Write(&reconcileTotal)).To(Succeed())
+					Expect(writeMetric("controller_runtime_reconcile_total", map[string]string{"controller": ctrl.Name, "result": "retry"}, &reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
 						return fmt.Errorf("metric reconcile total not reset")
 					}
@@ -1255,7 +1255,7 @@ var _ = Describe("controller", func() {
 				fakeReconcile.AddResult(reconcile.Result{Requeue: true}, nil)
 				Expect(<-reconciled).To(Equal(request))
 				Eventually(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "requeue").Write(&reconcileTotal)).To(Succeed())
+					Expect(writeMetric("controller_runtime_reconcile_total", map[string]string{"controller": ctrl.Name, "result": "requeue"}, &reconcileTotal)).To(Succeed())
 					if actual := reconcileTotal.GetCounter().GetValue(); actual != 1.0 {
 						return fmt.Errorf("metric reconcile total expected: %v and got: %v", 1.0, actual)
 					}
@@ -1265,7 +1265,7 @@ var _ = Describe("controller", func() {
 
 			It("should get updated when reconcile returns with retryAfter enabled", func(ctx SpecContext) {
 				Expect(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "retry_after").Write(&reconcileTotal)).To(Succeed())
+					Expect(writeMetric("controller_runtime_reconcile_total", map[string]string{"controller": ctrl.Name, "result": "retry_after"}, &reconcileTotal)).To(Succeed())
 					if reconcileTotal.GetCounter().GetValue() != 0.0 {
 						return fmt.Errorf("metric reconcile total not reset")
 					}
@@ -1282,7 +1282,7 @@ var _ = Describe("controller", func() {
 				fakeReconcile.AddResult(reconcile.Result{RequeueAfter: 5 * time.Hour}, nil)
 				Expect(<-reconciled).To(Equal(request))
 				Eventually(func() error {
-					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "requeue_after").Write(&reconcileTotal)).To(Succeed())
+					Expect(writeMetric("controller_runtime_reconcile_total", map[string]string{"controller": ctrl.Name, "result": "requeue_after"}, &reconcileTotal)).To(Succeed())
 					if actual := reconcileTotal.GetCounter().GetValue(); actual != 1.0 {
 						return fmt.Errorf("metric reconcile total expected: %v and got: %v", 1.0, actual)
 					}
@@ -1296,7 +1296,7 @@ var _ = Describe("controller", func() {
 				var reconcileErrs dto.Metric
 				ctrlmetrics.ReconcileErrors.Reset()
 				Expect(func() error {
-					Expect(ctrlmetrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)).To(Succeed())
+					Expect(writeMetric("controller_runtime_reconcile_errors_total", map[string]string{"controller": ctrl.Name}, &reconcileErrs)).To(Succeed())
 					if reconcileErrs.GetCounter().GetValue() != 0.0 {
 						return fmt.Errorf("metric reconcile errors not reset")
 					}
@@ -1313,7 +1313,7 @@ var _ = Describe("controller", func() {
 				fakeReconcile.AddResult(reconcile.Result{}, fmt.Errorf("expected error: reconcile"))
 				Expect(<-reconciled).To(Equal(request))
 				Eventually(func() error {
-					Expect(ctrlmetrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)).To(Succeed())
+					Expect(writeMetric("controller_runtime_reconcile_errors_total", map[string]string{"controller": ctrl.Name}, &reconcileErrs)).To(Succeed())
 					if reconcileErrs.GetCounter().GetValue() != 1.0 {
 						return fmt.Errorf("metrics not updated")
 					}
@@ -1334,9 +1334,7 @@ var _ = Describe("controller", func() {
 				ctrlmetrics.ReconcileTime.Reset()
 
 				Expect(func() error {
-					histObserver := ctrlmetrics.ReconcileTime.WithLabelValues(ctrl.Name)
-					hist := histObserver.(prometheus.Histogram)
-					Expect(hist.Write(&reconcileTime)).To(Succeed())
+					Expect(writeMetric("controller_runtime_reconcile_time_seconds", map[string]string{"controller": ctrl.Name}, &reconcileTime)).To(Succeed())
 					if reconcileTime.GetHistogram().GetSampleCount() != uint64(0) {
 						return fmt.Errorf("metrics not reset")
 					}
@@ -1358,9 +1356,7 @@ var _ = Describe("controller", func() {
 				Eventually(func() int { return queue.NumRequeues(request) }).Should(Equal(0))
 
 				Eventually(func() error {
-					histObserver := ctrlmetrics.ReconcileTime.WithLabelValues(ctrl.Name)
-					hist := histObserver.(prometheus.Histogram)
-					Expect(hist.Write(&reconcileTime)).To(Succeed())
+					Expect(writeMetric("controller_runtime_reconcile_time_seconds", map[string]string{"controller": ctrl.Name}, &reconcileTime)).To(Succeed())
 					if reconcileTime.GetHistogram().GetSampleCount() == uint64(0) {
 						return fmt.Errorf("metrics not updated")
 					}
@@ -2077,4 +2073,43 @@ func (f *fakePriorityQueue) AddWithOpts(o priorityqueue.AddOpts, items ...reconc
 	f.lock.Lock()
 	defer f.lock.Unlock()
 	f.added = append(f.added, priorityQueueAddition{AddOpts: o, items: items})
+}
+
+// writeMetric reads a single labeled series back from the controller-runtime
+// Registry into out. The operatorpkg metric interfaces no longer expose the
+// underlying prometheus vector (no WithLabelValues/Write), so metric values are
+// read by gathering rather than off the metric itself. out is reset when no
+// matching series exists yet.
+func writeMetric(name string, labels map[string]string, out *dto.Metric) error {
+	families, err := ctrlmetrics.Registry.Gather()
+	if err != nil {
+		return err
+	}
+	out.Reset()
+	for _, mf := range families {
+		if mf.GetName() != name {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			got := map[string]string{}
+			for _, lp := range m.GetLabel() {
+				got[lp.GetName()] = lp.GetValue()
+			}
+			if len(got) != len(labels) {
+				continue
+			}
+			match := true
+			for k, v := range labels {
+				if got[k] != v {
+					match = false
+					break
+				}
+			}
+			if match {
+				proto.Merge(out, m)
+				return nil
+			}
+		}
+	}
+	return nil
 }

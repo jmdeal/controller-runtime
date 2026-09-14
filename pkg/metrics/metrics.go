@@ -24,6 +24,31 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 )
 
+const (
+	labelSuccess      = "success"
+	labelError        = "error"
+	labelRequeueAfter = "requeue_after"
+	labelRequeue      = "requeue"
+)
+
+var (
+	ControllerLabel = opmetrics.Label{
+		Name: "controller",
+		Help: "The name of the controller that emitted the metric.",
+	}
+
+	ResultLabel = opmetrics.Label{
+		Name: "result",
+		Help: "The outcome of the reconcile.",
+		Values: []opmetrics.Value{
+			{Name: labelSuccess, Help: "The reconcile completed without error and was not requeued."},
+			{Name: labelError, Help: "The reconcile returned an error."},
+			{Name: labelRequeue, Help: "The reconcile requested an immediate requeue."},
+			{Name: labelRequeueAfter, Help: "The reconcile requested a requeue after a delay."},
+		},
+	}
+)
+
 var (
 	// ReconcileTotal is a prometheus counter metrics which holds the total
 	// number of reconciliations per controller. It has two labels. controller label refers
@@ -32,28 +57,28 @@ var (
 	ReconcileTotal = opmetrics.NewPrometheusCounter(Registry, prometheus.CounterOpts{
 		Name: "controller_runtime_reconcile_total",
 		Help: "Total number of reconciliations per controller",
-	}, []string{"controller", "result"})
+	}, []opmetrics.Label{ControllerLabel, ResultLabel}, opmetrics.GA)
 
 	// ReconcileErrors is a prometheus counter metrics which holds the total
 	// number of errors from the Reconciler.
 	ReconcileErrors = opmetrics.NewPrometheusCounter(Registry, prometheus.CounterOpts{
 		Name: "controller_runtime_reconcile_errors_total",
 		Help: "Total number of reconciliation errors per controller",
-	}, []string{"controller"})
+	}, []opmetrics.Label{ControllerLabel}, opmetrics.GA)
 
 	// TerminalReconcileErrors is a prometheus counter metrics which holds the total
 	// number of terminal errors from the Reconciler.
 	TerminalReconcileErrors = opmetrics.NewPrometheusCounter(Registry, prometheus.CounterOpts{
 		Name: "controller_runtime_terminal_reconcile_errors_total",
 		Help: "Total number of terminal reconciliation errors per controller",
-	}, []string{"controller"})
+	}, []opmetrics.Label{ControllerLabel}, opmetrics.GA)
 
 	// ReconcilePanics is a prometheus counter metrics which holds the total
 	// number of panics from the Reconciler.
 	ReconcilePanics = opmetrics.NewPrometheusCounter(Registry, prometheus.CounterOpts{
 		Name: "controller_runtime_reconcile_panics_total",
 		Help: "Total number of reconciliation panics per controller",
-	}, []string{"controller"})
+	}, []opmetrics.Label{ControllerLabel}, opmetrics.GA)
 
 	// ReconcileTime is a prometheus metric which keeps track of the duration
 	// of reconciliations.
@@ -65,21 +90,21 @@ var (
 		NativeHistogramBucketFactor:     1.1,
 		NativeHistogramMaxBucketNumber:  100,
 		NativeHistogramMinResetDuration: 1 * time.Hour,
-	}, []string{"controller"})
+	}, []opmetrics.Label{ControllerLabel}, opmetrics.GA)
 
 	// WorkerCount is a prometheus metric which holds the number of
 	// concurrent reconciles per controller.
 	WorkerCount = opmetrics.NewPrometheusGauge(Registry, prometheus.GaugeOpts{
 		Name: "controller_runtime_max_concurrent_reconciles",
 		Help: "Maximum number of concurrent reconciles per controller",
-	}, []string{"controller"})
+	}, []opmetrics.Label{ControllerLabel}, opmetrics.GA)
 
 	// ActiveWorkers is a prometheus metric which holds the number
 	// of active workers per controller.
 	ActiveWorkers = opmetrics.NewPrometheusGauge(Registry, prometheus.GaugeOpts{
 		Name: "controller_runtime_active_workers",
 		Help: "Number of currently used workers per controller",
-	}, []string{"controller"})
+	}, []opmetrics.Label{ControllerLabel}, opmetrics.GA)
 
 	// ReconcileTimeouts is a prometheus counter metric which holds the total
 	// number of reconciliations that timed out due to the ReconciliationTimeout
